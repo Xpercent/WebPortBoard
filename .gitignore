@@ -1,0 +1,7 @@
+node_modules
+dist
+*.local
+.DS_Store
+
+# 运行时读写的看板数据，含本机绝对路径
+panel.config.json
