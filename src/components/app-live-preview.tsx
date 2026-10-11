@@ -1,17 +1,15 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type RefObject,
-} from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react"
 import { AppFrame } from "@/components/app-runner"
 import { cn } from "@/lib/utils"
 import type { AppEntry } from "@/types"
 
-/** 展开/收起期间才打开 transition，其余时间逐帧贴合卡片位置（滚动、hover 抬升都不滞后） */
-const EXPAND_MS = 340
+const EXPAND_MS = 420
+const EASE = "cubic-bezier(0.22, 1, 0.36, 1)"
+/** 时长与缓动只写这一处；是否开 transition 由 measure 按「这次是不是形态切换」决定 */
+const CLIP_TRANSITION = ["left", "top", "width", "height", "border-radius"]
+  .map((prop) => `${prop} ${EXPAND_MS}ms ${EASE}`)
+  .join(", ")
+const BOX_TRANSITION = `transform ${EXPAND_MS}ms ${EASE}`
 
 function anchorOf(id: string) {
   return document.querySelector<HTMLElement>(`[data-preview-anchor="${CSS.escape(id)}"]`)
@@ -36,24 +34,23 @@ export function AppLivePreview({
   const boxRef = useRef<HTMLDivElement>(null)
   const anchorRef = useRef<HTMLElement | null>(null)
   const appliedRef = useRef("")
-  const expandedRef = useRef(expanded)
+  /** 上一次写入时的形态，用来区分「切换」和「跟随卡片位置」 */
+  const writtenRef = useRef<boolean | null>(null)
   const [mounted, setMounted] = useState(false)
   /** 记录已加载完的 frameKey，换地址/重载后自动回到透明骨架，不用 effect 抢时序 */
   const [readyKey, setReadyKey] = useState<string | null>(null)
-  const [animating, setAnimating] = useState(false)
 
   const frameKey = `${app.url}|${reloadTick}`
 
   useEffect(() => {
-    expandedRef.current = expanded
     if (expanded) setMounted(true)
   }, [expanded])
 
-  useEffect(() => {
-    setAnimating(true)
-    const timer = window.setTimeout(() => setAnimating(false), EXPAND_MS)
-    return () => window.clearTimeout(timer)
-  }, [expanded])
+  /** 卡片重渲染后预览框节点会被换掉，所以要重新查 */
+  const findAnchor = useCallback(() => {
+    if (!anchorRef.current?.isConnected) anchorRef.current = anchorOf(app.id)
+    return anchorRef.current
+  }, [app.id])
 
   const measure = useCallback(() => {
     const container = containerRef.current
@@ -62,11 +59,10 @@ export function AppLivePreview({
     if (!container || !clip || !box) return
 
     const c = container.getBoundingClientRect()
-    let g = { x: 0, y: 0, w: c.width, h: c.height, dx: 0, dy: 0, s: 1 }
+    let g = { x: 0, y: 0, w: c.width, h: c.height, dx: 0, s: 1 }
 
-    if (!expandedRef.current) {
-      if (!anchorRef.current?.isConnected) anchorRef.current = anchorOf(app.id)
-      const a = anchorRef.current?.getBoundingClientRect()
+    if (!expanded) {
+      const a = findAnchor()?.getBoundingClientRect()
       if (!a || a.width < 2 || a.height < 2) return
       // 按 cover 缩放：iframe 的布局视口恒等于主区域，两种形态间不会重排
       const s = Math.max(a.width / c.width, a.height / c.height)
@@ -76,28 +72,31 @@ export function AppLivePreview({
         w: a.width,
         h: a.height,
         dx: (a.width - c.width * s) / 2,
-        dy: 0,
         s,
       }
     }
 
     const next = [c.width, c.height, g.x, g.y, g.w, g.h, g.dx, g.s].map((n) => n.toFixed(2)).join()
     if (next === appliedRef.current) return
+    const switching = writtenRef.current !== null && writtenRef.current !== expanded
+    writtenRef.current = expanded
     appliedRef.current = next
 
+    // transition 和几何在同一次写入里一起给出：切换时动画，跟随时瞬时
+    clip.style.transition = switching ? CLIP_TRANSITION : "none"
+    box.style.transition = switching ? BOX_TRANSITION : "none"
     clip.style.left = `${g.x}px`
     clip.style.top = `${g.y}px`
     clip.style.width = `${g.w}px`
     clip.style.height = `${g.h}px`
     box.style.width = `${c.width}px`
     box.style.height = `${c.height}px`
-    box.style.transform = `translate(${g.dx}px, ${g.dy}px) scale(${g.s})`
-  }, [app.id, containerRef])
+    box.style.transform = `translate(${g.dx}px, 0) scale(${g.s})`
+  }, [containerRef, expanded, findAnchor])
 
   useEffect(() => {
     if (mounted) return
-    if (!anchorRef.current?.isConnected) anchorRef.current = anchorOf(app.id)
-    const anchor = anchorRef.current
+    const anchor = findAnchor()
     if (!anchor) return
     const io = new IntersectionObserver(
       (entries) => entries.some((entry) => entry.isIntersecting) && setMounted(true),
@@ -105,9 +104,10 @@ export function AppLivePreview({
     )
     io.observe(anchor)
     return () => io.disconnect()
-  }, [app.id, mounted])
+  }, [findAnchor, mounted])
 
-  useLayoutEffect(measure, [measure])
+  // 切换必须在提交时同步写：标签页被遮挡时 rAF 会整个停摆，靠 rAF 就漏掉这一帧
+  useLayoutEffect(measure, [measure, mounted])
 
   useEffect(() => {
     let frame = requestAnimationFrame(function loop() {
@@ -123,21 +123,9 @@ export function AppLivePreview({
     <div
       ref={clipRef}
       style={{ pointerEvents: expanded ? "auto" : "none" }}
-      className={cn(
-        "absolute overflow-hidden",
-        expanded ? "z-30" : "z-10 rounded-t-lg",
-        animating &&
-          "transition-[left,top,width,height,border-radius] duration-[340ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
-      )}
+      className={cn("absolute overflow-hidden", expanded ? "z-30" : "z-10 rounded-t-lg")}
     >
-      <div
-        ref={boxRef}
-        className={cn(
-          "absolute left-0 top-0 origin-top-left",
-          animating &&
-            "transition-transform duration-[340ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
-        )}
-      >
+      <div ref={boxRef} className="absolute left-0 top-0 origin-top-left">
         <AppFrame
           key={frameKey}
           app={app}
