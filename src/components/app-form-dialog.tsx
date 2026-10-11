@@ -231,10 +231,6 @@ export function AppFormDialog({
             </div>
           ) : null}
 
-          {draft.preview === "live" && !draft.url.trim() ? (
-            <p className="text-[12px] text-destructive">实时预览需要先填写访问地址。</p>
-          ) : null}
-
           <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-surface-muted/60 px-4 py-3.5">
             <div className="flex items-center gap-3">
               <Zap className="size-4 text-primary" />

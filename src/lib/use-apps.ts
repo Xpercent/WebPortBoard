@@ -16,7 +16,7 @@ function normalize(raw: unknown): AppEntry | null {
     description: typeof r.description === "string" ? r.description : "",
     autoStart: !!r.autoStart,
     accent: r.accent && r.accent in ACCENTS ? r.accent : "indigo",
-    preview: r.preview === "live" || r.preview === "image" ? r.preview : "none",
+    preview: r.preview === "image" ? "image" : "none",
     previewImage: typeof r.previewImage === "string" ? r.previewImage : "",
     createdAt: typeof r.createdAt === "number" ? r.createdAt : Date.now(),
   }

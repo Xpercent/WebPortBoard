@@ -6,7 +6,7 @@ export type AccentKey =
   | "amber"
   | "rose"
 
-export type PreviewMode = "none" | "live" | "image"
+export type PreviewMode = "none" | "image"
 
 export interface AppEntry {
   id: string
@@ -36,6 +36,5 @@ export const ACCENT_KEYS = Object.keys(ACCENTS) as AccentKey[]
 
 export const PREVIEW_MODES: { value: PreviewMode; label: string; hint: string }[] = [
   { value: "none", label: "不显示", hint: "卡片用标识色首字母" },
-  { value: "live", label: "实时页面", hint: "卡片内嵌缩小版页面" },
   { value: "image", label: "自定义图", hint: "上传或粘贴预览图" },
 ]

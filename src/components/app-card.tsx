@@ -29,15 +29,6 @@ export function AppCard({
             alt={`${app.name} 预览`}
             className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
           />
-        ) : app.preview === "live" && app.url ? (
-          <iframe
-            src={app.url}
-            title={`${app.name} 预览`}
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none absolute left-0 top-0 size-[400%] origin-top-left scale-[0.25] border-0 bg-white"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          />
         ) : (
           <div
             className="flex size-full items-center justify-center"
