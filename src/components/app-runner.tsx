@@ -2,7 +2,29 @@ import { useEffect, useState } from "react"
 import { Check, Copy } from "lucide-react"
 import { AppAvatar } from "@/components/app-avatar"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import type { AppEntry } from "@/types"
+
+/** 卡片实时预览与全屏运行共用这个 iframe，两种形态下属性保持一致 */
+export function AppFrame({
+  app,
+  className,
+  onLoad,
+}: {
+  app: AppEntry
+  className?: string
+  onLoad?: () => void
+}) {
+  return (
+    <iframe
+      src={app.url}
+      title={app.name}
+      onLoad={onLoad}
+      className={cn("size-full border-0 bg-white", className)}
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
+    />
+  )
+}
 
 export function AppRunner({ app }: { app: AppEntry }) {
   const [copied, setCopied] = useState(false)
@@ -21,13 +43,7 @@ export function AppRunner({ app }: { app: AppEntry }) {
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface-muted">
       {app.url ? (
-        <iframe
-          key={app.url}
-          src={app.url}
-          title={app.name}
-          className="size-full border-0 bg-white"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
-        />
+        <AppFrame app={app} />
       ) : (
         <div className="flex h-full items-center justify-center p-8">
           <div className="flex max-w-md min-w-0 flex-col items-center gap-4 rounded-lg border border-dashed border-border bg-card p-8 text-center shadow-panel">

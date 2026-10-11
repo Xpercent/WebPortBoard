@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import {
   ArrowLeft,
   ExternalLink,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { AppAvatar } from "@/components/app-avatar"
 import { AppCard } from "@/components/app-card"
+import { AppLivePreview } from "@/components/app-live-preview"
 import { AppRunner } from "@/components/app-runner"
 import { AppFormDialog } from "@/components/app-form-dialog"
 import { Button } from "@/components/ui/button"
@@ -36,11 +37,16 @@ export default function App() {
   const [pendingDelete, setPendingDelete] = useState<AppEntry | null>(null)
   /** 打开过的应用保持挂载，返回看板不会卸载页面 */
   const [liveIds, setLiveIds] = useState<string[]>([])
-  /** 每个应用的重载计数，变化时重建对应 AppRunner */
+  /** 每个应用的重载计数，变化时重建对应的内嵌页面 */
   const [reloadTicks, setReloadTicks] = useState<Record<string, number>>({})
 
+  const mainRef = useRef<HTMLElement>(null)
+
   const selectedApp = apps.find((app) => app.id === selectedId) ?? null
-  const liveApps = apps.filter((app) => liveIds.includes(app.id))
+  /** 实时预览应用由预览层的同一个 iframe 兼顾卡片缩略与全屏，不再另挂 Runner */
+  const stageApps = apps.filter((app) => app.preview === "live" && !!app.url)
+  const stageIds = new Set(stageApps.map((app) => app.id))
+  const runnerApps = apps.filter((app) => liveIds.includes(app.id) && !stageIds.has(app.id))
   const autoCount = apps.filter((app) => app.autoStart).length
 
   function openApp(id: string) {
@@ -171,7 +177,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="relative min-h-0 flex-1">
+      <main ref={mainRef} className="relative min-h-0 flex-1 overflow-hidden">
         <div
           className={cn(
             "scroll-surface absolute inset-0 overflow-y-auto px-8 py-8",
@@ -207,13 +213,23 @@ export default function App() {
           </section>
         </div>
 
-        {liveApps.map((app) => (
+        {runnerApps.map((app) => (
           <div
             key={`${app.id}|${app.url}|${app.command}|${reloadTicks[app.id] ?? 0}`}
             className={cn("absolute inset-0", selectedId === app.id ? "visible" : "invisible")}
           >
             <AppRunner app={app} />
           </div>
+        ))}
+
+        {stageApps.map((app) => (
+          <AppLivePreview
+            key={app.id}
+            app={app}
+            containerRef={mainRef}
+            expanded={selectedId === app.id}
+            reloadTick={reloadTicks[app.id] ?? 0}
+          />
         ))}
       </main>
 

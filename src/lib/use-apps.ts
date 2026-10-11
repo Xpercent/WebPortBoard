@@ -16,7 +16,7 @@ function normalize(raw: unknown): AppEntry | null {
     description: typeof r.description === "string" ? r.description : "",
     autoStart: !!r.autoStart,
     accent: r.accent && r.accent in ACCENTS ? r.accent : "indigo",
-    preview: r.preview === "image" ? "image" : "none",
+    preview: r.preview === "image" || r.preview === "live" ? r.preview : "none",
     previewImage: typeof r.previewImage === "string" ? r.previewImage : "",
     createdAt: typeof r.createdAt === "number" ? r.createdAt : Date.now(),
   }
@@ -41,7 +41,8 @@ export function useApps() {
   const [apps, setApps] = useState<AppEntry[]>(readCache)
   /** file = 由 dev server 读写 panel.config.json；local = 静态部署时退回浏览器本地 */
   const [store, setStore] = useState<"file" | "local">("local")
-  const skipNextWrite = useRef(true)
+  /** 首次读取完成前绝不回写：否则 StrictMode 的第二次 effect 会用旧缓存盖掉配置文件 */
+  const hydrated = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -50,12 +51,14 @@ export function useApps() {
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(res.statusText))))
       .then((data: unknown) => {
         if (cancelled) return
-        skipNextWrite.current = true
         setApps(parseList(data))
         setStore("file")
       })
       .catch(() => {
         /* 静态部署没有这个接口，继续用浏览器本地缓存 */
+      })
+      .finally(() => {
+        if (!cancelled) hydrated.current = true
       })
 
     return () => {
@@ -64,10 +67,7 @@ export function useApps() {
   }, [])
 
   useEffect(() => {
-    if (skipNextWrite.current) {
-      skipNextWrite.current = false
-      return
-    }
+    if (!hydrated.current) return
 
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify(apps))
