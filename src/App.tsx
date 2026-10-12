@@ -112,10 +112,10 @@ export default function App() {
             <div className="flex min-w-0 items-center gap-2 border-l border-border pl-4">
               <LayoutGrid className="size-4 shrink-0 text-primary" />
               <span className="shrink-0 text-[13.5px] font-semibold tracking-tight">
-                Webapp Panel
+                WebPortBoard
               </span>
               <span className="hidden truncate text-[12.5px] text-muted-foreground lg:inline">
-                本地项目运行看板 · {store === "file" ? "panel.config.json" : "浏览器缓存"}
+                本地项目运行看板 · {store === "file" ? "config.json" : "浏览器缓存"}
               </span>
             </div>
           )}

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import { ACCENTS, type AppEntry, type DraftApp } from "@/types"
 
-const CONFIG_ENDPOINT = "/__panel/config"
-const CACHE_KEY = "webapp-panel:apps:v1"
+const CONFIG_ENDPOINT = "/__config"
+const CACHE_KEY = "board:apps:v1"
 
 function normalize(raw: unknown): AppEntry | null {
   if (!raw || typeof raw !== "object") return null
@@ -39,7 +39,7 @@ function readCache(): AppEntry[] {
 
 export function useApps() {
   const [apps, setApps] = useState<AppEntry[]>(readCache)
-  /** file = 由 dev server 读写 panel.config.json；local = 静态部署时退回浏览器本地 */
+  /** file = 由 dev server 读写 config.json；local = 静态部署时退回浏览器本地 */
   const [store, setStore] = useState<"file" | "local">("local")
   /** 首次读取完成前绝不回写：否则 StrictMode 的第二次 effect 会用旧缓存盖掉配置文件 */
   const hydrated = useRef(false)

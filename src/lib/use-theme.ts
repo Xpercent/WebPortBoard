@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 
 export type Theme = "light" | "dark"
 
-const STORAGE_KEY = "webapp-panel:theme"
+const STORAGE_KEY = "board:theme"
 
 function initialTheme(): Theme {
   const saved = localStorage.getItem(STORAGE_KEY)

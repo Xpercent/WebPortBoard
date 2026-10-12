@@ -1,4 +1,4 @@
-# Webapp Panel · 本地项目运行看板
+# WebPortBoard · 本地项目运行看板
 
 把常跑的本地 Web 项目收成一块看板：每个项目一张卡片，点开就在看板里直接跑起来。
 
@@ -36,9 +36,9 @@ npm run dev
 
 ## 配置存储
 
-应用列表存在项目根目录的 `panel.config.json`，而不是浏览器 localStorage —— 换浏览器、换机器打开的都是同一块看板。
+应用列表存在项目根目录的 `config.json`，而不是浏览器 localStorage —— 换浏览器、换机器打开的都是同一块看板。
 
-读写走 `vite.config.ts` 里 `panelConfigStore` 插件挂的 `/__panel/config` 接口（GET 读、PUT 写），因此**只有在 `npm run dev` 下才会落盘**。静态部署没有这个接口时，看板自动退回浏览器本地缓存，顶栏会显示当前存储来源。
+读写走 `vite.config.ts` 里 `configStore` 插件挂的 `/__config` 接口（GET 读、PUT 写），因此**只有在 `npm run dev` 下才会落盘**。静态部署没有这个接口时，看板自动退回浏览器本地缓存，顶栏会显示当前存储来源。
 
 该文件含本机绝对路径，已在 `.gitignore` 中，不会进版本库。字段结构：
 
