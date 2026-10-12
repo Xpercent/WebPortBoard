@@ -1,15 +1,53 @@
-import { ArrowUpRight, Zap } from "lucide-react"
+import { ArrowUpRight, CircleAlert, Loader2, Zap } from "lucide-react"
 import { AppAvatar } from "@/components/app-avatar"
 import { Pill } from "@/components/ui/pill"
+import type { RunStatus } from "@/lib/use-auto-start"
 import { ACCENTS, type AppEntry } from "@/types"
+
+const PILL_CLASS = "shrink-0 px-2 py-[3px] text-[10.5px]"
+
+/** 自动启动的应用用进程状态顶掉「自动」标，其余应用维持原样 */
+function RunPill({ status }: { status: RunStatus }) {
+  if (status.state === "starting") {
+    return (
+      <Pill tone="primary" className={PILL_CLASS}>
+        <Loader2 className="size-3 animate-spin" />
+        启动中
+      </Pill>
+    )
+  }
+
+  if (status.state === "exited") {
+    return (
+      <Pill
+        tone="danger"
+        className={PILL_CLASS}
+        title={status.log.slice(-4).join("\n") || undefined}
+      >
+        <CircleAlert className="size-3" />
+        {status.exitCode === 0 ? "已退出" : "启动失败"}
+      </Pill>
+    )
+  }
+
+  return (
+    <Pill tone="success" className={PILL_CLASS}>
+      <span className="size-1.5 rounded-full bg-emerald-500" />
+      {status.external ? "已在运行" : "运行中"}
+    </Pill>
+  )
+}
 
 export function AppCard({
   app,
-  running,
+  opened,
+  status,
   onOpen,
 }: {
   app: AppEntry
-  running: boolean
+  /** 应用页面在看板里挂着 */
+  opened: boolean
+  status?: RunStatus
   onOpen: () => void
 }) {
   const lines = app.command.split(/\r?\n/).filter((line) => line.trim())
@@ -51,16 +89,17 @@ export function AppCard({
           <h3 className="min-w-0 flex-1 truncate text-[14.5px] font-semibold tracking-tight">
             {app.name}
           </h3>
-          {running ? (
-            <Pill tone="success" className="shrink-0 px-2 py-[3px] text-[10.5px]">
-              <span className="size-1.5 rounded-full bg-emerald-500" />
-              运行中
-            </Pill>
-          ) : null}
-          {app.autoStart ? (
+          {status ? (
+            <RunPill status={status} />
+          ) : app.autoStart ? (
             <Pill tone="primary">
               <Zap className="size-3" />
               自动
+            </Pill>
+          ) : null}
+          {opened ? (
+            <Pill tone="primary" className={PILL_CLASS}>
+              已打开
             </Pill>
           ) : null}
         </div>

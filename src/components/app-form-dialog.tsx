@@ -237,7 +237,7 @@ export function AppFormDialog({
               <div className="flex flex-col gap-0.5">
                 <span className="text-[13px] font-medium">随面板自动启动</span>
                 <span className="text-[11.5px] text-muted-foreground">
-                  打开看板时记住该应用需要启动
+                  面板启动时按这条命令拉起进程，退出面板时一并结束
                 </span>
               </div>
             </div>

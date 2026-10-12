@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   ArrowLeft,
   ExternalLink,
@@ -24,12 +24,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { toDraft, useApps } from "@/lib/use-apps"
+import { useAutoStart } from "@/lib/use-auto-start"
 import { useTheme } from "@/lib/use-theme"
 import { cn } from "@/lib/utils"
 import type { AppEntry, DraftApp } from "@/types"
 
 export default function App() {
   const { apps, addApp, updateApp, removeApp, store } = useApps()
+  const statuses = useAutoStart()
   const { theme, toggleTheme } = useTheme()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<AppEntry | null>(null)
@@ -41,6 +43,8 @@ export default function App() {
   const [reloadTicks, setReloadTicks] = useState<Record<string, number>>({})
 
   const mainRef = useRef<HTMLElement>(null)
+  /** 上一轮的进程状态，用来认出「这一轮刚刚就绪」 */
+  const statesRef = useRef<Record<string, string>>({})
 
   const selectedApp = apps.find((app) => app.id === selectedId) ?? null
   /** 实时预览应用由预览层的同一个 iframe 兼顾卡片缩略与全屏，不再另挂 Runner */
@@ -48,6 +52,22 @@ export default function App() {
   const stageIds = new Set(stageApps.map((app) => app.id))
   const runnerApps = apps.filter((app) => liveIds.includes(app.id) && !stageIds.has(app.id))
   const autoCount = apps.filter((app) => app.autoStart).length
+  const runningCount = Object.values(statuses).filter((s) => s.state === "running").length
+
+  useEffect(() => {
+    const prev = statesRef.current
+    statesRef.current = Object.fromEntries(
+      Object.entries(statuses).map(([id, status]) => [id, status.state]),
+    )
+
+    for (const [id, state] of Object.entries(statesRef.current)) {
+      // 自动启动就绪后刷一次已挂载的页面，不然它会停在「找不到 localhost」的错误页上
+      const was = prev[id]
+      if (state === "running" && (was === "starting" || was === "exited")) {
+        setReloadTicks((ticks) => ({ ...ticks, [id]: (ticks[id] ?? 0) + 1 }))
+      }
+    }
+  }, [statuses])
 
   function openApp(id: string) {
     setSelectedId(id)
@@ -190,6 +210,7 @@ export default function App() {
                 <h1 className="text-[26px] leading-none font-semibold tracking-tight">应用看板</h1>
                 <p className="text-[13px] text-muted-foreground">
                   共 {apps.length} 个应用 · {autoCount} 个随面板自动启动
+                  {runningCount > 0 ? ` · ${runningCount} 个在运行` : ""}
                   {liveIds.length > 0 ? ` · ${liveIds.length} 个已打开` : ""}
                 </p>
               </div>
@@ -203,7 +224,8 @@ export default function App() {
                   <AppCard
                     key={app.id}
                     app={app}
-                    running={liveIds.includes(app.id)}
+                    opened={liveIds.includes(app.id)}
+                    status={statuses[app.id]}
                     onOpen={() => openApp(app.id)}
                   />
                 ))}

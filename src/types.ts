@@ -14,6 +14,7 @@ export interface AppEntry {
   command: string
   url: string
   description: string
+  /** dev server 启动时用 command 拉起进程，面板退出时一并结束 */
   autoStart: boolean
   accent: AccentKey
   preview: PreviewMode

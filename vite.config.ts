@@ -4,16 +4,19 @@ import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
 import { existsSync, writeFileSync, readFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { autoStart, createAppRunner } from './auto-start'
 
 const CONFIG_PATH = fileURLToPath(new URL('./config.json', import.meta.url))
 const ENDPOINT = '/__config'
 const MAX_BODY = 10 * 1024 * 1024
 
+const runner = createAppRunner(CONFIG_PATH)
+
 /**
  * 看板配置存在项目根目录的 config.json，而不是浏览器 localStorage，
  * 这样换浏览器、换机器打开都是同一块看板。
  */
-function configStore(): Plugin {
+function configStore(onWritten: () => void): Plugin {
   return {
     name: 'config-store',
     configureServer(server) {
@@ -48,6 +51,7 @@ function configStore(): Plugin {
               return
             }
             writeFileSync(CONFIG_PATH, `${body}\n`)
+            onWritten()
             res.statusCode = 200
             res.end('{"ok":true}')
           })
@@ -62,7 +66,13 @@ function configStore(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), configStore()],
+  // 配置写盘后按最新的 autoStart 调整进程，面板起来时也走同一套逻辑
+  plugins: [
+    react(),
+    tailwindcss(),
+    configStore(() => void runner.reconcile().catch(() => {})),
+    autoStart(runner),
+  ],
   server: {
     port: 5180,
     strictPort: true,
