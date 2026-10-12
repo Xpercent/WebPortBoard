@@ -99,7 +99,7 @@ export function useApps() {
     setApps((prev) => prev.filter((app) => app.id !== id))
   }
 
-  return { apps, addApp, updateApp, removeApp, store }
+  return { apps, addApp, updateApp, removeApp }
 }
 
 export function toDraft(app: AppEntry): DraftApp {

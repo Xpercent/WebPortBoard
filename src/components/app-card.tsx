@@ -50,8 +50,6 @@ export function AppCard({
   status?: RunStatus
   onOpen: () => void
 }) {
-  const lines = app.command.split(/\r?\n/).filter((line) => line.trim())
-  const extraLines = Math.max(lines.length - 1, 0)
   const { from, to } = ACCENTS[app.accent]
   /** 实时预览的 iframe 挂在 main 上覆盖这块区域，卡片这里只留骨架 */
   const live = app.preview === "live" && !!app.url
@@ -104,15 +102,10 @@ export function AppCard({
           ) : null}
         </div>
 
-        <p className="line-clamp-1 text-[12.5px] text-muted-foreground">
-          {app.description || "未填写说明"}
-        </p>
-
-        <div className="mt-auto flex items-center gap-2 pt-1.5">
-          <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
-            {lines[0] ?? ""}
-          </code>
-          {extraLines > 0 ? <Pill>+{extraLines} 行</Pill> : null}
+        <div className="flex items-center gap-2">
+          <p className="min-w-0 flex-1 line-clamp-1 text-[12.5px] text-muted-foreground">
+            {app.description || "未填写说明"}
+          </p>
           <ArrowUpRight className="size-4 shrink-0 -translate-x-1 text-primary opacity-0 transition-all duration-300 group-hover:translate-x-0 group-hover:opacity-100" />
         </div>
       </div>

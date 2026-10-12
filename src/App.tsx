@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils"
 import type { AppEntry, DraftApp } from "@/types"
 
 export default function App() {
-  const { apps, addApp, updateApp, removeApp, store } = useApps()
+  const { apps, addApp, updateApp, removeApp } = useApps()
   const statuses = useAutoStart()
   const { theme, toggleTheme } = useTheme()
   const [formOpen, setFormOpen] = useState(false)
@@ -135,7 +135,7 @@ export default function App() {
                 WebPortBoard
               </span>
               <span className="hidden truncate text-[12.5px] text-muted-foreground lg:inline">
-                本地项目运行看板 · {store === "file" ? "config.json" : "浏览器缓存"}
+                本地项目运行看板
               </span>
             </div>
           )}
