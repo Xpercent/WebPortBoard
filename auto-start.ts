@@ -27,6 +27,8 @@ interface Spec {
   name: string
   command: string
   url: string
+  /** 配置里的「随面板自动启动」，被界面上的按钮操作过就不再听它 */
+  autoStart: boolean
 }
 
 interface Task extends Spec {
@@ -41,9 +43,11 @@ interface Task extends Spec {
 }
 
 export interface AppRunner {
-  /** 以 config.json 里的 autoStart 为准：缺的补上，多了收掉，命令改了重开 */
+  /** 以 config.json 为准：该跑又没跑的补上，不该跑的收掉，命令改了重开 */
   reconcile(): Promise<void>
   statuses(): AppStatus[]
+  /** 界面上的启动/中止按钮：记下这个应用的意图并立刻按它调整，返回 false 表示配置里没有它 */
+  setIntent(id: string, want: boolean): Promise<boolean>
   shutdown(): void
 }
 
@@ -62,13 +66,14 @@ function readSpecs(configPath: string): Spec[] | null {
   const specs: Spec[] = []
   for (const item of list) {
     const raw = item as (Partial<Spec> & { autoStart?: unknown }) | null
-    if (!raw || raw.autoStart !== true || typeof raw.id !== "string") continue
+    if (!raw || typeof raw.id !== "string") continue
     if (typeof raw.command !== "string" || !raw.command.trim()) continue
     specs.push({
       id: raw.id,
       name: typeof raw.name === "string" ? raw.name : raw.id,
       command: raw.command,
       url: typeof raw.url === "string" ? raw.url : "",
+      autoStart: raw.autoStart === true,
     })
   }
   return specs
@@ -108,9 +113,19 @@ function stripAnsi(line: string) {
 
 export function createAppRunner(configPath: string): AppRunner {
   const tasks = new Map<string, Task>()
+  /** 界面按钮按下的意图，优先级高于配置里的 autoStart；重启面板即清空 */
+  const intents = new Map<string, boolean>()
   let probeTimer: ReturnType<typeof setTimeout> | undefined
   /** reconcile 串行跑：连着保存两次不能并发拉起同一个应用 */
   let queue: Promise<void> = Promise.resolve()
+
+  function shouldRun(spec: Spec) {
+    return intents.get(spec.id) ?? spec.autoStart
+  }
+
+  function findSpec(id: string) {
+    return readSpecs(configPath)?.find((spec) => spec.id === id)
+  }
 
   function hasStarting() {
     return [...tasks.values()].some((task) => task.state === "starting")
@@ -259,7 +274,7 @@ export function createAppRunner(configPath: string): AppRunner {
 
     for (const task of [...tasks.values()]) {
       const spec = desired.get(task.id)
-      if (!spec) {
+      if (!spec || !shouldRun(spec)) {
         await stop(task)
         continue
       }
@@ -274,9 +289,33 @@ export function createAppRunner(configPath: string): AppRunner {
     }
 
     for (const spec of desired.values()) {
-      if (!kept.has(spec.id)) await launch(spec)
+      if (!kept.has(spec.id) && shouldRun(spec)) await launch(spec)
     }
     syncProbing()
+  }
+
+  async function applyIntent(id: string, want: boolean) {
+    const spec = findSpec(id)
+    if (!spec) {
+      intents.delete(id)
+      return false
+    }
+    intents.set(id, want)
+
+    const run = queue.then(async () => {
+      const task = tasks.get(id)
+      if (want && (!task || task.state === "exited")) {
+        // 自己退出的任务还占在表里，摘掉它才能按当前命令重开
+        if (task) drop(task)
+        await launch(spec)
+      } else if (!want && task) {
+        await stop(task)
+      }
+      syncProbing()
+    })
+    queue = run.catch(() => {})
+    await run
+    return true
   }
 
   return {
@@ -294,6 +333,7 @@ export function createAppRunner(configPath: string): AppRunner {
         exitCode: task.exitCode,
         log: [...task.log],
       })),
+    setIntent: applyIntent,
     shutdown() {
       for (const task of tasks.values()) killTree(task)
       tasks.clear()
@@ -302,18 +342,72 @@ export function createAppRunner(configPath: string): AppRunner {
   }
 }
 
+/** 界面上的按钮只发一个 id，正文超过这个长度就不是给这里用的 */
+const MAX_BODY = 4096
+
+function readBody(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    req.on("data", (chunk: Buffer) => {
+      size += chunk.length
+      if (size > MAX_BODY) {
+        reject(new Error("body too large"))
+        return
+      }
+      chunks.push(chunk)
+    })
+    req.on("error", reject)
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")))
+      } catch {
+        reject(new Error("invalid json"))
+      }
+    })
+  })
+}
+
+function json(res: ServerResponse, code: number, body: Record<string, unknown>) {
+  res.statusCode = code
+  res.setHeader("Content-Type", "application/json")
+  res.end(JSON.stringify(body))
+}
+
+async function control(req: IncomingMessage, res: ServerResponse, runner: AppRunner) {
+  let raw: unknown
+  try {
+    raw = await readBody(req)
+  } catch {
+    json(res, 400, { error: "invalid json" })
+    return
+  }
+
+  const { id, action } = (raw ?? {}) as { id?: unknown; action?: unknown }
+  const want = action === "start" ? true : action === "stop" ? false : null
+  if (typeof id !== "string" || !id || want === null) {
+    json(res, 400, { error: "need id and action=start|stop" })
+    return
+  }
+
+  const ok = await runner.setIntent(id, want)
+  json(res, ok ? 200 : 404, ok ? { ok: true } : { error: "unknown app" })
+}
+
 export function autoStart(runner: AppRunner): Plugin {
   return {
     name: "app-auto-start",
     configureServer(server) {
       server.middlewares.use(ENDPOINT, (req: IncomingMessage, res: ServerResponse) => {
-        if (req.method !== "GET") {
-          res.statusCode = 405
-          res.end('{"error":"method not allowed"}')
+        if (req.method === "GET") {
+          json(res, 200, { apps: runner.statuses() })
           return
         }
-        res.setHeader("Content-Type", "application/json")
-        res.end(JSON.stringify({ apps: runner.statuses() }))
+        if (req.method === "POST") {
+          void control(req, res, runner)
+          return
+        }
+        json(res, 405, { error: "method not allowed" })
       })
 
       const http = server.httpServer

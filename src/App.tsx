@@ -3,10 +3,13 @@ import {
   ArrowLeft,
   ExternalLink,
   LayoutGrid,
+  Loader2,
   Moon,
   Pencil,
+  Play,
   Plus,
   RefreshCw,
+  Square,
   Sun,
   Trash2,
 } from "lucide-react"
@@ -24,14 +27,63 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { toDraft, useApps } from "@/lib/use-apps"
+import type { RunAction, RunStatus } from "@/lib/use-auto-start"
 import { useAutoStart } from "@/lib/use-auto-start"
 import { useTheme } from "@/lib/use-theme"
 import { cn } from "@/lib/utils"
 import type { AppEntry, DraftApp } from "@/types"
 
+/** 应用界面里的进程开关：没跑就按启动命令拉起，跑着就把整棵进程树收掉 */
+function RunButton({
+  app,
+  status,
+  pending,
+  onRun,
+}: {
+  app: AppEntry
+  status?: RunStatus
+  pending: boolean
+  onRun: (id: string, action: RunAction) => void
+}) {
+  const live = status && status.state !== "exited" ? status : null
+  // 看板自己没拉起的进程收不到，按钮保留「中止」形态并禁用，免得看着像能点
+  const unmanaged = !!live && live.external
+  const running = !!live
+  const disabled = pending || unmanaged || (!running && !app.command.trim())
+
+  const title = pending
+    ? undefined
+    : unmanaged
+      ? "进程在看板之外启动，看板中止不了它"
+      : running
+        ? "结束看板拉起的这个进程"
+        : app.command.trim()
+          ? "按启动命令拉起进程"
+          : "先给它填上启动命令"
+
+  return (
+    <Button
+      variant={running ? "destructive" : "ghost"}
+      size="sm"
+      title={title}
+      disabled={disabled}
+      onClick={() => onRun(app.id, running ? "stop" : "start")}
+    >
+      {pending ? (
+        <Loader2 className="animate-spin" />
+      ) : running ? (
+        <Square />
+      ) : (
+        <Play />
+      )}
+      {pending ? (running ? "中止中" : "启动中") : running ? "中止" : "启动"}
+    </Button>
+  )
+}
+
 export default function App() {
   const { apps, addApp, updateApp, removeApp } = useApps()
-  const statuses = useAutoStart()
+  const { statuses, pending, run } = useAutoStart()
   const { theme, toggleTheme } = useTheme()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<AppEntry | null>(null)
@@ -144,6 +196,12 @@ export default function App() {
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {selectedApp && (
             <>
+              <RunButton
+                app={selectedApp}
+                status={statuses[selectedApp.id]}
+                pending={pending === selectedApp.id}
+                onRun={run}
+              />
               <Button
                 variant="ghost"
                 size="icon"
